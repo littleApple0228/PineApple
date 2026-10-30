@@ -1,0 +1,19 @@
+-- 非破壞性初始化；不含 DROP，重跑不會刪除既有資料。
+CREATE DATABASE IF NOT EXISTS activity_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE activity_platform;
+CREATE TABLE IF NOT EXISTS activities (
+ id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ title VARCHAR(100) NOT NULL,
+ description TEXT NOT NULL,
+ starts_at DATETIME NOT NULL COMMENT '台灣當地時間 UTC+8',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+-- B、C 共用的預定資料結構；API 由各負責人實作。
+CREATE TABLE IF NOT EXISTS registrations (
+ id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ activity_id INT UNSIGNED NOT NULL,
+ name VARCHAR(100) NOT NULL,
+ phone VARCHAR(30) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT fk_registration_activity FOREIGN KEY (activity_id) REFERENCES activities(id)
+);

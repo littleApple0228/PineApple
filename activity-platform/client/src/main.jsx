@@ -1,25 +1,142 @@
-import React, {useState} from 'react';
-import {createRoot} from 'react-dom/client';
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import './style.css';
-function App(){
- const [page,setPage]=useState('create');
- const [form,setForm]=useState({title:'',description:'',startsAt:''});
- const [busy,setBusy]=useState(false); const [message,setMessage]=useState(null);
- function change(e){setForm({...form,[e.target.name]:e.target.value});setMessage(null);}
- async function submit(e){e.preventDefault();if(busy)return;setBusy(true);setMessage(null);
- try{const response=await fetch('/api/activities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
- const result=await response.json();if(!response.ok)throw new Error(result.error||'新增失敗，請稍後重試。');
- setMessage({ok:true,text:`活動「${result.data.title}」已新增成功！活動編號：${result.data.id}`});setForm({title:'',description:'',startsAt:''});
- }catch(error){setMessage({ok:false,text:error instanceof TypeError?'無法連線，請確認後端已啟動。':error.message});}finally{setBusy(false);}}
- return <><header><div className="nav"><a className="brand" href="#create" onClick={()=>setPage('create')}>◈ 活動集合所</a><nav aria-label="主要導覽">{[['list','活動清單'],['create','新增活動'],['registrations','報名清單']].map(([id,label])=><a key={id} href={'#'+id} aria-current={page===id?'page':undefined} onClick={()=>{setPage(id);setMessage(null)}}>{label}</a>)}</nav></div></header>
- <main><p className="eyebrow">ACTIVITY PLATFORM / ORGANIZER</p><h1>{page==='create'?'讓下一場相聚，從這裡開始。':page==='list'?'活動清單':'報名清單'}</h1><p className="intro">{page==='create'?'填寫活動資訊，建立一場值得期待的活動。':'此功能預留給其他組員接入，目前尚未完成。'}</p>
- {page==='create'?<div className="layout"><section className="card"><div className="card-head"><span className="step">01</span><div><h2>新增活動</h2><p>標示 * 的欄位為必填</p></div></div>
- <form onSubmit={submit}><label htmlFor="title">活動名稱 *</label><input id="title" name="title" value={form.title} onChange={change} required maxLength={100} placeholder="例如：週末桌遊交流會" disabled={busy}/>
- <label htmlFor="startsAt">活動時間 *</label><input id="startsAt" type="datetime-local" name="startsAt" value={form.startsAt} onChange={change} required disabled={busy}/><small>以台灣當地時間（UTC+8）填寫。</small>
- <label htmlFor="description">活動說明</label><textarea id="description" name="description" value={form.description} onChange={change} maxLength={2000} rows={6} placeholder="介紹活動內容、集合地點，以及參加者需要知道的事…" disabled={busy}/><small className="count">{form.description.length} / 2000</small>
- {message&&<div className={message.ok?'notice success':'notice error'} role={message.ok?'status':'alert'}>{message.text}</div>}
- <div className="actions"><span>確認資訊後即可建立活動</span><button disabled={busy} type="submit">{busy?'建立中…':'建立活動 →'}</button></div></form></section>
- <aside><span className="tag">主辦人的第一步</span><h2>把想法變成<br/>一次相聚。</h2><p>清楚的名稱、時間與說明，讓參加者更快了解你的活動。</p><hr/><p>01　取一個清楚的活動名稱</p><p>02　確認活動日期與時間</p><p>03　補上地點與參加須知</p></aside></div>:<section className="card placeholder"><h2>等待組員接入</h2><p>{page==='list'?'B：活動列表、報名表單與相關 API。':'C：依活動查詢報名名單與相關 API。'}</p><button onClick={()=>setPage('create')}>返回新增活動</button></section>}
- <footer>課堂專案 · A 模組 / 新增活動</footer></main></>;
+
+function App() {
+  const [page, setPage] = useState('list'); // 'list' 或 'create'
+  const [activities, setActivities] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  
+  // 報名表單狀態 (組員 B 負責)
+  const [regForm, setRegForm] = useState({ name: '', phone: '' });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  // 1. 取得活動列表
+  const fetchActivities = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:3001/api/activities');
+      const data = await res.json();
+      if (res.ok) {
+        setActivities(data.data || []);
+      }
+    } catch (err) {
+      console.error('無法取得活動列表:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchActivities();
+  }, []);
+
+  // 2. 送出報名 (組員 B 負責)
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!selectedActivity) return;
+    setBusy(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch('http://127.0.0.1:3001/api/registrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: selectedActivity.id,
+          name: regForm.name,
+          phone: regForm.phone
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '報名失敗');
+
+      setMessage({ ok: true, text: `🎉 報名成功！感謝 ${regForm.name} 的參與。` });
+      setRegForm({ name: '', phone: '' });
+      setSelectedActivity(null);
+    } catch (err) {
+      setMessage({ ok: false, text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <header>
+        <div className="nav">
+          <a className="brand" onClick={() => setPage('list')}>活動平台</a>
+          <button onClick={() => { setPage('list'); fetchActivities(); }}>活動清單</button>
+        </div>
+      </header>
+
+      <main>
+        {message && (
+          <div className={message.ok ? 'notice success' : 'notice error'}>
+            {message.text}
+          </div>
+        )}
+
+        {page === 'list' && (
+          <section className="card">
+            <h2>🎉 可報名的活動清單</h2>
+            {activities.length === 0 ? (
+              <p>目前尚無活動可報名。</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+                {activities.map((act) => (
+                  <div key={act.id} style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px' }}>
+                    <h3>{act.title}</h3>
+                    <p>{act.description}</p>
+                    <small>時間：{act.starts_at || act.startsAt}</small>
+                    <br />
+                    <button 
+                      style={{ marginTop: '10px' }} 
+                      onClick={() => setSelectedActivity(act)}
+                    >
+                      點擊報名
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 報名彈窗 / 表單 */}
+            {selectedActivity && (
+              <div style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', border: '2px solid #007bff', borderRadius: '8px' }}>
+                <h3>報名活動：{selectedActivity.title}</h3>
+                <form onSubmit={handleRegister}>
+                  <label htmlFor="name">姓名 *</label>
+                  <input 
+                    id="name"
+                    type="text" 
+                    required 
+                    value={regForm.name} 
+                    onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} 
+                  />
+
+                  <label htmlFor="phone">聯絡電話 *</label>
+                  <input 
+                    id="phone"
+                    type="tel" 
+                    required 
+                    value={regForm.phone} 
+                    onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} 
+                  />
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <button type="submit" disabled={busy}>
+                      {busy ? '送出中...' : '確認送出報名'}
+                    </button>
+                    <button type="button" onClick={() => setSelectedActivity(null)}>取消</button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+    </>
+  );
 }
-createRoot(document.getElementById('root')).render(<App/>);
+
+createRoot(document.getElementById('root')).render(<App />);
